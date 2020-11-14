@@ -536,7 +536,7 @@ void serialPrefix(unsigned* in, unsigned* out, unsigned start, unsigned end)
     assert(start!=0);
     out[start] = in[start-1]; 
     for (unsigned i = start+1; i <= end; i++)
-        out[i] = out[i-1]+in[i]; 
+        out[i] = out[i-1]+in[i-1]; 
 }
 
 void thrdPrefix(unsigned* arr, unsigned BS, unsigned NTHRD, unsigned len)
@@ -555,37 +555,42 @@ void applyThrdPrefix(unsigned* arr, unsigned start, unsigned end)
 
 void triangleCount(graph* g, unsigned* ds, int* supp, unsigned maxOutDeg)
 { 
-
-    thread_local std::unordered_map<unsigned, unsigned> neighSet (2*maxOutDeg);
-    #pragma omp for
-    for (unsigned i = 0; i < g->n; i++)
+    long long unsigned int totCount = 0;
+    #pragma omp parallel
     {
-        //hash neighbors
-        for (unsigned j = g->cd[i]; j<g->cd[i]+ds[i]; j++)
-            neighSet.insert(std::make_pair(g->adj[j], g->eid[j]));
-
-        //join with neighbors of neighbors
-        for (unsigned j = g->cd[i]; j<g->cd[i]+ds[i]; j++)
+        thread_local std::unordered_map<unsigned, unsigned> neighSet (2*maxOutDeg);
+        #pragma omp for reduction(+:totCount)
+        for (unsigned i = 0; i < g->n; i++)
         {
-            unsigned neigh = g->adj[j];
-            unsigned e1 = g->eid[j];
-            for (unsigned k = g->cd[neigh]; k < g->cd[neigh]+ds[neigh]; k++)
-            {
-                unsigned neighOfNeigh = g->adj[k];
-                std::unordered_map<unsigned, unsigned>::const_iterator got = neighSet.find(neighOfNeigh);
-                if (got == neighSet.end())
-                    continue;
-                unsigned e2 = g->eid[k];
-                unsigned e3 = got->second;
-                __sync_fetch_and_add(&supp[e1], 1);
-                __sync_fetch_and_add(&supp[e2], 1);
-                __sync_fetch_and_add(&supp[e3], 1);
-            } 
-        }
+            //hash neighbors
+            for (unsigned j = g->cd[i]; j<g->cd[i]+ds[i]; j++)
+                neighSet.insert(std::make_pair(g->adj[j], g->eid[j]));
 
-        for (unsigned j = g->cd[i]; j<g->cd[i] + ds[i]; j++)
-            neighSet.erase(g->adj[i]);
+            //join with neighbors of neighbors
+            for (unsigned j = g->cd[i]; j<g->cd[i]+ds[i]; j++)
+            {
+                unsigned neigh = g->adj[j];
+                unsigned e1 = g->eid[j];
+                for (unsigned k = g->cd[neigh]; k < g->cd[neigh]+ds[neigh]; k++)
+                {
+                    unsigned neighOfNeigh = g->adj[k];
+                    std::unordered_map<unsigned, unsigned>::const_iterator got = neighSet.find(neighOfNeigh);
+                    if (got == neighSet.end())
+                        continue;
+                    unsigned e2 = g->eid[k];
+                    unsigned e3 = got->second;
+                    __sync_fetch_and_add(&supp[e1], 1);
+                    __sync_fetch_and_add(&supp[e2], 1);
+                    __sync_fetch_and_add(&supp[e3], 1);
+                    totCount++;
+                } 
+            }
+
+            for (unsigned j = g->cd[i]; j<g->cd[i] + ds[i]; j++)
+                neighSet.erase(g->adj[j]);
+        }
     }
+    printf("total count = %llu\n", totCount);
 }
 
 //overloaded function, discards deleted edges
@@ -635,6 +640,8 @@ void triangleCount(graph* g, unsigned* ds, bool* deleted, int* supp, unsigned ma
 
 graph* extractSub(graph* dag, unsigned startV, unsigned stride, unsigned thresh)
 {
+    assert(stride > 0);
+
     bool *vExist = (bool *)malloc(dag->n*sizeof(bool));
     unsigned *ds = (unsigned *)malloc(dag->n*sizeof(unsigned));
     unsigned *dp = (unsigned *)malloc(dag->n*sizeof(unsigned));
@@ -644,6 +651,7 @@ graph* extractSub(graph* dag, unsigned startV, unsigned stride, unsigned thresh)
     unsigned NTHRD = omp_get_num_threads();
     unsigned BS = (dag->n-1)/NTHRD + 1;
 
+    printf("num vertices = %d, num edges = %d\n", dag->n, dag->cd[dag->n]);
 
     int *supp;
     unsigned *uniqE;
@@ -652,6 +660,8 @@ graph* extractSub(graph* dag, unsigned startV, unsigned stride, unsigned thresh)
     bool* inCurr;
     bool* processed;
     unsigned currFrontierSize, nxtFrontierSize;
+
+    unsigned sharedVar;
 
     #pragma omp parallel num_threads(NTHRD)
     {
@@ -673,6 +683,9 @@ graph* extractSub(graph* dag, unsigned startV, unsigned stride, unsigned thresh)
                 vExist[dag->adj[j]] = true;
         }
 
+        #pragma omp single
+        printf("found vertices\n");
+
         //CREATING DEGREE ARRAYS OF VERTICES
         #pragma omp for reduction (max:maxOutDeg)
         for (unsigned i = 0; i < dag->n; i++)
@@ -692,6 +705,10 @@ graph* extractSub(graph* dag, unsigned startV, unsigned stride, unsigned thresh)
                 __sync_fetch_and_add(&dp[i], ds[i]);
             }
         }
+
+
+        #pragma omp single
+        printf("computed degrees\n");
 
         #pragma omp barrier 
         //PREFIX SCAN START//
@@ -724,11 +741,16 @@ graph* extractSub(graph* dag, unsigned startV, unsigned stride, unsigned thresh)
         }
         //PREFIX SCAN END//
 
+        #pragma omp single
+        printf("computed csr offsets. Edges = %u\n", uniqE[dag->n]);
+
         //#pragma omp barrier
         #pragma omp single
         {
             supp = (int  *)malloc(uniqE[dag->n]*sizeof(int));
             eIdToEdge = (edge *)malloc(uniqE[dag->n]*sizeof(edge));
+            g->adj = (unsigned *)malloc(g->cd[dag->n]*sizeof(unsigned));
+            g->eid = (unsigned *)malloc(g->cd[dag->n]*sizeof(unsigned));
         }
         #pragma omp barrier
 
@@ -771,17 +793,25 @@ graph* extractSub(graph* dag, unsigned startV, unsigned stride, unsigned thresh)
             }
         }
 
+        #pragma omp single
+        printf("constructed csr edge array\n");
+
         #pragma omp for
-        for (unsigned i = 0; i < g->n; i++)
+        for (unsigned i = 0; i < dag->n; i++)
         {
             if (vExist[i])
                 std::sort(g->adj+g->cd[i]+ds[i], g->adj+g->cd[i+1]);
         }
 
-        triangleCount(g, ds, supp, maxOutDeg);
+        #pragma omp single
+        printf("sorted adjacencies\n");
+
     } 
 
     g->e = g->cd[dag->n]; g->n = dag->n;
+
+    triangleCount(g, ds, supp, maxOutDeg);
+
     currFrontier = (unsigned *)malloc(g->e*sizeof(unsigned));
     nxtFrontier = (unsigned *)malloc(g->e*sizeof(unsigned));
     inCurr = (bool *)malloc(g->e*sizeof(bool));
@@ -1146,6 +1176,13 @@ unsigned long long kclique_main(unsigned char k, graph *g) {
 int main(int argc, char** argv) {
 	edgelist* el;
 	graph* g;
+
+    if (argc < 4)
+    {
+        printf("Usage: ./DDegColNodeParallel <num_threads> <k> <graph_file>\n");
+        exit(1);
+    }
+
 	unsigned char k = atoi(argv[2]);
 	unsigned long long n;
 
@@ -1179,6 +1216,10 @@ int main(int argc, char** argv) {
 	t1 = t2;
 
 	printf("Iterate over all cliques\n");
+
+
+    graph* gFilt;
+    gFilt = extractSub(g, 0, 1, k-2); 
 
 	n = kclique_main(k, g);
 
