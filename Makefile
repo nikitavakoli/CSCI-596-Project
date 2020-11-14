@@ -1,4 +1,4 @@
-CC=gcc
+CC=g++
 CFLAGS=-O9
 
 all: nodeParallel

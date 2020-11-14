@@ -21,11 +21,13 @@ Will print the number of k-cliques.
 #include <string.h>
 #include <time.h>
 #include <omp.h>
-
+#include <cassert>
+#include <algorithm>
+#include <unordered_map>
 
 #define NLINKS 100000000 //maximum number of edges for memory allocation, will increase if needed
 
-typedef struct {
+typedef struct edge{
 	unsigned s;
 	unsigned t;
 
@@ -35,7 +37,7 @@ typedef struct {
         this->s = s;
         this->t = t;
     }
-} edge;
+};
 
 typedef struct {
 	unsigned n;//number of nodes
@@ -48,6 +50,7 @@ typedef struct {
 
 typedef struct {
 	unsigned n;
+    unsigned e;
 	unsigned *cd;//cumulative degree: (starts with 0) length=n+1
 	unsigned *adj;//truncated list of neighbors
     unsigned *eid;
@@ -122,25 +125,28 @@ inline unsigned int max3(unsigned int a, unsigned int b, unsigned int c) {
 
 edgelist* readedgelist(char* input) {
 	unsigned e1 = NLINKS;
-	edgelist *el = malloc(sizeof(edgelist));
+	edgelist *el = (edgelist*) malloc(sizeof(edgelist));
 	FILE *file;
 
 	el->n = 0;
 	el->e = 0;
+    unsigned s,t;
 	file = fopen(input, "r");
-	el->edges = malloc(e1 * sizeof(edge));
-	while (fscanf(file, "%u %u", &(el->edges[el->e].s), &(el->edges[el->e].t)) == 2) {//Add one edge
+	el->edges = (edge*) malloc(e1 * sizeof(edge));
+	while (fscanf(file, "%u %u", &s, &t) == 2) {//Add one edge
+        if (s==t) continue;
+        el->edges[el->e].s = s; el->edges[el->e].t = t;
 		el->n = max3(el->n, el->edges[el->e].s, el->edges[el->e].t);
 		el->e++;
 		if (el->e == e1) {
 			e1 += NLINKS;
-			el->edges = realloc(el->edges, e1 * sizeof(edge));
+			el->edges = (edge*) realloc(el->edges, e1 * sizeof(edge));
 		}
 	}
 	fclose(file);
 	el->n++;
 
-	el->edges = realloc(el->edges, el->e * sizeof(edge));
+	el->edges = (edge*) realloc(el->edges, el->e * sizeof(edge));
 
 	return el;
 }
@@ -177,13 +183,13 @@ typedef struct {
 
 bheap *construct(unsigned n_max) {
 	unsigned i;
-	bheap *heap = malloc(sizeof(bheap));
+	bheap *heap = (bheap*) malloc(sizeof(bheap));
 
 	heap->n_max = n_max;
 	heap->n = 0;
-	heap->pt = malloc(n_max * sizeof(unsigned));
+	heap->pt = (unsigned*) malloc(n_max * sizeof(unsigned));
 	for (i = 0; i < n_max; i++) heap->pt[i] = -1;
-	heap->kv = malloc(n_max * sizeof(keyvalue));
+	heap->kv = (keyvalue*) malloc(n_max * sizeof(keyvalue));
 	return heap;
 }
 
@@ -271,9 +277,9 @@ void ord_core(edgelist* el) {
 	keyvalue kv;
 	bheap *heap;
 
-	unsigned *d0 = calloc(el->n, sizeof(unsigned));
-	unsigned *cd0 = malloc((el->n + 1) * sizeof(unsigned));
-	unsigned *adj0 = malloc(2 * el->e * sizeof(unsigned));
+	unsigned *d0 = (unsigned*) calloc(el->n, sizeof(unsigned));
+	unsigned *cd0 = (unsigned*) malloc((el->n + 1) * sizeof(unsigned));
+	unsigned *adj0 = (unsigned*) malloc(2 * el->e * sizeof(unsigned));
 	for (i = 0; i < e; i++) {
 		d0[el->edges[i].s]++;
 		d0[el->edges[i].t]++;
@@ -290,7 +296,7 @@ void ord_core(edgelist* el) {
 
 	heap = mkheap(n, d0);
 
-	el->rank = malloc(n * sizeof(unsigned));
+	el->rank = (unsigned*) malloc(n * sizeof(unsigned));
 	for (i = 0; i < n; i++) {
 		kv = popmin(heap);
 		el->rank[kv.key] = n - (++r);
@@ -312,16 +318,16 @@ graph* mkgraph(edgelist *el) {
 	unsigned i, max;
 	unsigned *d;
     unsigned *din;
-	graph* g = malloc(sizeof(graph));
+	graph* g = (graph*) malloc(sizeof(graph));
 
-	d = calloc(el->n, sizeof(unsigned));
+	d = (unsigned*) calloc(el->n, sizeof(unsigned));
     
 
 	for (i = 0; i < el->e; i++) {
 		d[el->edges[i].s]++;
 	}
 
-	g->cd = malloc((el->n + 1) * sizeof(unsigned));
+	g->cd = (unsigned*) malloc((el->n + 1) * sizeof(unsigned));
 	g->cd[0] = 0;
 	max = 0;
 	for (i = 1; i < el->n + 1; i++) {
@@ -332,7 +338,7 @@ graph* mkgraph(edgelist *el) {
 
 	printf("core value (max truncated degree) = %u\n", max);
 
-	g->adj = malloc(el->e * sizeof(unsigned));
+	g->adj = (unsigned*) malloc(el->e * sizeof(unsigned));
 
 	for (i = 0; i < el->e; i++) {
 		g->adj[g->cd[el->edges[i].s] + d[el->edges[i].s]++] = el->edges[i].t;
@@ -369,7 +375,7 @@ unsigned updateGlobalQueue (unsigned locQWrPtr, unsigned locQSize, unsigned* glo
 
 
 /*******************************************************************************************************/
-void trussScan(unsigned numEdges, unsigned *EdgeSupport, unsigned level, unsigned *curr, unsigned *currTail, bool *InCurr) {
+void trussScan(unsigned numEdges, int *EdgeSupport, unsigned level, unsigned *curr, unsigned *currTail, bool *InCurr) {
     // Size of cache line
     const unsigned BUFFER_SIZE_BYTES = 2048;
     const unsigned BUFFER_SIZE = BUFFER_SIZE_BYTES/sizeof(unsigned);
@@ -402,8 +408,8 @@ void trussScan(unsigned numEdges, unsigned *EdgeSupport, unsigned level, unsigne
 
 
 //Process a sublevel in a level using intersection based approach
-void PKT_processSubLevel_intersection(graph_t *g, unsigned *curr, bool *InCurr, unsigned currTail, int *EdgeSupport, 
-    int level, unsigned *next, unsigned *nextTail, bool *processed, Edge * edgeIdtoEdge) {
+void PKT_processSubLevel_intersection(graph *g, unsigned *curr, bool *InCurr, unsigned currTail, int *EdgeSupport, 
+    int level, unsigned *next, unsigned *nextTail, bool *processed, edge * edgeIdtoEdge) {
 
     //Size of cache line
     const unsigned BUFFER_SIZE_BYTES = 2048;
@@ -420,8 +426,8 @@ void PKT_processSubLevel_intersection(graph_t *g, unsigned *curr, bool *InCurr, 
 
 	    edge ev = edgeIdtoEdge[e1];  
 
-	    unsigned u = ev.u;
-	    unsigned v = ev.v;
+	    unsigned u = ev.s;
+	    unsigned v = ev.t;
 
 
 	    unsigned uStart = g->cd[u], uEnd = g->cd[u+1];
@@ -528,16 +534,16 @@ void PKT_processSubLevel_intersection(graph_t *g, unsigned *curr, bool *InCurr, 
 void serialPrefix(unsigned* in, unsigned* out, unsigned start, unsigned end)
 {
     assert(start!=0);
-    out[start] = input[start-1]; 
+    out[start] = in[start-1]; 
     for (unsigned i = start+1; i <= end; i++)
         out[i] = out[i-1]+in[i]; 
 }
 
 void thrdPrefix(unsigned* arr, unsigned BS, unsigned NTHRD, unsigned len)
 {
-    out[0] = 0;
+    arr[0] = 0;
     for (unsigned i = 0; i < NTHRD; i++)
-        out[std::min((i+1)*BS, len)] += out[i*BS]; 
+        arr[std::min((i+1)*BS, len)] += arr[i*BS]; 
 }
 
 void applyThrdPrefix(unsigned* arr, unsigned start, unsigned end)
@@ -547,16 +553,16 @@ void applyThrdPrefix(unsigned* arr, unsigned start, unsigned end)
         arr[i] += prevSum;
 }
 
-void triangleCount(graph* g, unsigned* ds, int* supp)
+void triangleCount(graph* g, unsigned* ds, int* supp, unsigned maxOutDeg)
 { 
 
     thread_local std::unordered_map<unsigned, unsigned> neighSet (2*maxOutDeg);
     #pragma omp for
-    for (unsigned i = 0; i < dag->n; i++)
+    for (unsigned i = 0; i < g->n; i++)
     {
         //hash neighbors
         for (unsigned j = g->cd[i]; j<g->cd[i]+ds[i]; j++)
-            neighSet.insert(g->adj[j], g->eid[j]);
+            neighSet.insert(std::make_pair(g->adj[j], g->eid[j]));
 
         //join with neighbors of neighbors
         for (unsigned j = g->cd[i]; j<g->cd[i]+ds[i]; j++)
@@ -583,21 +589,21 @@ void triangleCount(graph* g, unsigned* ds, int* supp)
 }
 
 //overloaded function, discards deleted edges
-void triangleCount(graph* g, unsigned* ds, bool* deleted, int* supp)
+void triangleCount(graph* g, unsigned* ds, bool* deleted, int* supp, unsigned maxOutDeg)
 { 
     #pragma omp for
-    for (unsigned i = 0; i < g->m; i++)
+    for (unsigned i = 0; i < g->e; i++)
         supp[i] = 0;
 
     thread_local std::unordered_map<unsigned, unsigned> neighSet (2*maxOutDeg);
     #pragma omp for
-    for (unsigned i = 0; i < dag->n; i++)
+    for (unsigned i = 0; i < g->n; i++)
     {
             //hash neighbors
             for (unsigned j = g->cd[i]; j<g->cd[i]+ds[i]; j++)
             {
                 if (!deleted[g->eid[j]])
-                    neighSet.insert(g->adj[j], g->eid[j]);
+                    neighSet.insert(std::make_pair(g->adj[j], g->eid[j]));
             }
 
             //join with neighbors of neighbors
@@ -631,7 +637,7 @@ graph* extractSub(graph* dag, unsigned startV, unsigned stride, unsigned thresh)
 {
     bool *vExist = (bool *)malloc(dag->n*sizeof(bool));
     unsigned *ds = (unsigned *)malloc(dag->n*sizeof(unsigned));
-    unsigned *dp = (unsigned *i)malloc(dag->n*sizeof(unsigned));
+    unsigned *dp = (unsigned *)malloc(dag->n*sizeof(unsigned));
     graph* g = (graph*) malloc(sizeof(graph));
     edge* eIdToEdge;
     unsigned maxOutDeg = 0;
@@ -643,7 +649,7 @@ graph* extractSub(graph* dag, unsigned startV, unsigned stride, unsigned thresh)
     unsigned *uniqE;
     unsigned *currFrontier;
     unsigned *nxtFrontier;
-    bool* inCurrFrontier;
+    bool* inCurr;
     bool* processed;
     unsigned currFrontierSize, nxtFrontierSize;
 
@@ -769,26 +775,26 @@ graph* extractSub(graph* dag, unsigned startV, unsigned stride, unsigned thresh)
         for (unsigned i = 0; i < g->n; i++)
         {
             if (vExist[i])
-                qsort(g->adj+g->cd[i]+ds[i], g->adj+g->cd[i+1]);
+                std::sort(g->adj+g->cd[i]+ds[i], g->adj+g->cd[i+1]);
         }
 
-        triangleCount(g, ds, supp);
+        triangleCount(g, ds, supp, maxOutDeg);
     } 
 
-    g->m = g->cd[dag->n]; g->n = dag->n;
-    currFrontier = (unsigned *)malloc(g->m*sizeof(unsigned));
-    nxtFrontier = (unsigned *)malloc(g->m*sizeof(unsigned));
-    inCurr = (unsigned *)malloc(g->m*sizeof(bool));
-    processed = (bool *)malloc(g->m*sizeof(bool));
+    g->e = g->cd[dag->n]; g->n = dag->n;
+    currFrontier = (unsigned *)malloc(g->e*sizeof(unsigned));
+    nxtFrontier = (unsigned *)malloc(g->e*sizeof(unsigned));
+    inCurr = (bool *)malloc(g->e*sizeof(bool));
+    processed = (bool *)malloc(g->e*sizeof(bool));
     currFrontierSize = 0; nxtFrontierSize = 0;
     #pragma omp parallel
     {
         #pragma omp for schedule (static)
-        for (unsigned i = 0; i < g->m; i++)
+        for (unsigned i = 0; i < g->e; i++)
             processed[i] = false;
 
         //Remove_undesired_edges();
-        trussScan(g->cd[dag->n], supp, thresh-1, curr, &currFrontierSize, inCurr);
+        trussScan(g->cd[dag->n], supp, thresh-1, currFrontier, &currFrontierSize, inCurr);
         while(currFrontierSize > 0)
         {
 	        PKT_processSubLevel_intersection(g, currFrontier, inCurr, currFrontierSize, supp, thresh-1, nxtFrontier, &nxtFrontierSize, processed, eIdToEdge);
@@ -829,6 +835,7 @@ graph* extractSub(graph* dag, unsigned startV, unsigned stride, unsigned thresh)
     //Reconstruct Graph
     #pragma omp parallel
     {
+        unsigned tid = omp_get_thread_num();
         #pragma omp for
         for (unsigned i = 0; i < dag->n; i++)
         {
@@ -845,8 +852,7 @@ graph* extractSub(graph* dag, unsigned startV, unsigned stride, unsigned thresh)
             }
         }
 
-        //TODO
-        parallel_prefix(ds[i], newCd);
+        //PREFIX SCAN
         #pragma omp single
         {
             
@@ -869,6 +875,8 @@ graph* extractSub(graph* dag, unsigned startV, unsigned stride, unsigned thresh)
             #pragma omp barrier
             applyThrdPrefix(newCd, start, end);
         }
+        //PREFIX SCAN END
+
         #pragma omp single
         newAdj = (unsigned *)malloc(newCd[g->n]*sizeof(unsigned));
         #pragma omp barrier
@@ -914,16 +922,16 @@ graph* extractSub(graph* dag, unsigned startV, unsigned stride, unsigned thresh)
 
 subgraph* allocsub(graph *g, unsigned char k) {
 	unsigned i;
-	subgraph* sg = malloc(sizeof(subgraph));
-	sg->n = calloc(k, sizeof(unsigned));
-	sg->d = malloc(k * sizeof(unsigned*));
-	sg->nodes = malloc(k * sizeof(unsigned*));
-	sg->adj = malloc(g->core*g->core * sizeof(unsigned*));
+	subgraph* sg = (subgraph*) malloc(sizeof(subgraph));
+	sg->n = (unsigned*) calloc(k, sizeof(unsigned));
+	sg->d = (unsigned**) malloc(k * sizeof(unsigned*));
+	sg->nodes = (unsigned**) malloc(k * sizeof(unsigned*));
+	sg->adj = (unsigned*) malloc(g->core*g->core * sizeof(unsigned));
 	for (i = 2; i < k; i++) {
-		sg->d[i] = malloc(g->core * sizeof(unsigned));
-		sg->nodes[i] = malloc(g->core * sizeof(unsigned));
+		sg->d[i] = (unsigned*) malloc(g->core * sizeof(unsigned));
+		sg->nodes[i] = (unsigned*) malloc(g->core * sizeof(unsigned));
 	}
-	sg->lab = calloc(g->core, sizeof(unsigned char));
+	sg->lab = (unsigned char*) calloc(g->core, sizeof(unsigned char));
 
 	sg->core = g->core;
 	return sg;
@@ -932,14 +940,14 @@ subgraph* allocsub(graph *g, unsigned char k) {
 void mksub(graph* g, unsigned u, subgraph* sg, unsigned char k) {
 	unsigned i, j, l, v, w;
 
-	static unsigned *old = NULL, *new = NULL;//to improve
-#pragma omp threadprivate(new,old)
+	static unsigned *old = NULL, *mynew = NULL;//to improve
+#pragma omp threadprivate(mynew,old)
 
 	if (old == NULL) {
-		new = malloc(g->n * sizeof(unsigned));
-		old = malloc(g->core * sizeof(unsigned));
+		mynew = (unsigned*) malloc(g->n * sizeof(unsigned));
+		old = (unsigned*) malloc(g->core * sizeof(unsigned));
 		for (i = 0; i < g->n; i++) {
-			new[i] = -1;
+			mynew[i] = -1;
 		}
 	}
 
@@ -950,7 +958,7 @@ void mksub(graph* g, unsigned u, subgraph* sg, unsigned char k) {
 	j = 0;
 	for (i = g->cd[u]; i < g->cd[u + 1]; i++) {
 		v = g->adj[i];
-		new[v] = j;
+		mynew[v] = j;
 		old[j] = v;
 		sg->lab[j] = k - 1;
 		sg->nodes[k - 1][j] = j;
@@ -960,12 +968,12 @@ void mksub(graph* g, unsigned u, subgraph* sg, unsigned char k) {
 
 	sg->n[k - 1] = j;
 
-	unsigned *d0 = calloc(j, sizeof(unsigned));
+	unsigned *d0 = (unsigned*) calloc(j, sizeof(unsigned));
 	for (i = 0; i < sg->n[k - 1]; i++) {//reodering adjacency list and computing new degrees
 		v = old[i];
 		for (l = g->cd[v]; l < g->cd[v + 1]; l++) {
 			w = g->adj[l];
-			j = new[w];
+			j = mynew[w];
 			if (j != -1) {
 				sg->adj[sg->core*i + sg->d[k - 1][i]++] = j;
 				sg->adj[sg->core*j + sg->d[k - 1][j]++] = i;
@@ -975,11 +983,11 @@ void mksub(graph* g, unsigned u, subgraph* sg, unsigned char k) {
 			}
 		}
 	}
-	unsigned *C = calloc(sg->n[k - 1], sizeof(unsigned));
-	int *color = malloc(sg->n[k - 1] * sizeof(int));
-	unsigned *Index = malloc(sg->n[k - 1] * sizeof(unsigned));
+	unsigned *C = (unsigned*) calloc(sg->n[k - 1], sizeof(unsigned));
+	int *color = (int*) malloc(sg->n[k - 1] * sizeof(int));
+	unsigned *Index = (unsigned*) malloc(sg->n[k - 1] * sizeof(unsigned));
 	iddegree *ig;
-	ig = malloc(sg->n[k - 1] * sizeof(iddegree));
+	ig = (iddegree*) malloc(sg->n[k - 1] * sizeof(iddegree));
 	for (i = 0; i < sg->n[k - 1]; i++)
 	{
 		color[i] = -1;
@@ -1023,7 +1031,7 @@ void mksub(graph* g, unsigned u, subgraph* sg, unsigned char k) {
 
 	}
 
-	sg->color = malloc(sg->n[k - 1] * sizeof(unsigned));
+	sg->color = (unsigned*) malloc(sg->n[k - 1] * sizeof(unsigned));
 
 	for (int i = 0; i < sg->n[k - 1]; i++)
 	{
@@ -1036,7 +1044,7 @@ void mksub(graph* g, unsigned u, subgraph* sg, unsigned char k) {
 		v = old[i];
 		for (l = g->cd[v]; l < g->cd[v + 1]; l++) {
 			w = g->adj[l];
-			j = new[w];
+			j = mynew[w];
 			if (j != -1) {
 
 				if (color[Index[i]] > color[Index[j]])
@@ -1054,7 +1062,7 @@ void mksub(graph* g, unsigned u, subgraph* sg, unsigned char k) {
 
 
 	for (i = g->cd[u]; i < g->cd[u + 1]; i++) {
-		new[g->adj[i]] = -1;
+		mynew[g->adj[i]] = -1;
 	}
 }
 
