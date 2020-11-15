@@ -792,7 +792,7 @@ graph* extractSub(graph* dag, unsigned startV, unsigned stride, unsigned thresh)
     g->adj = (unsigned *)malloc(g->cd[dag->n]*sizeof(unsigned));
     g->eid = (unsigned *)malloc(g->cd[dag->n]*sizeof(unsigned));
 
-    #pragma omp parallel
+    #pragma omp parallel num_threads(NTHRD)
     {
         unsigned tid = omp_get_thread_num();
 
@@ -881,7 +881,7 @@ graph* extractSub(graph* dag, unsigned startV, unsigned stride, unsigned thresh)
     inCurr = (bool *)malloc((g->e/2)*sizeof(bool));
     processed = (bool *)malloc((g->e/2)*sizeof(bool));
     currFrontierSize = 0; nxtFrontierSize = 0;
-    #pragma omp parallel
+    #pragma omp parallel num_threads(NTHRD)
     {
         #pragma omp for schedule (static)
         for (unsigned i = 0; i < uniqE[g->n]; i++)
@@ -895,7 +895,6 @@ graph* extractSub(graph* dag, unsigned startV, unsigned stride, unsigned thresh)
         #pragma omp single
         printf("edges peeled = %u\n", currFrontierSize);
         while(currFrontierSize > 0)
-        //while(0)
         {
 	        PKT_processSubLevel_intersection(g, currFrontier, inCurr, currFrontierSize, supp, thresh-1, nxtFrontier, &nxtFrontierSize, processed, eIdToEdge);
             #pragma omp single
@@ -928,15 +927,14 @@ graph* extractSub(graph* dag, unsigned startV, unsigned stride, unsigned thresh)
     free(processed);
     free(uniqE);
     
-    unsigned *newCd = (unsigned *)malloc((dag->n+1)*sizeof(unsigned));
-    newCd[0] = 0;
 
+    unsigned *newCd;
     unsigned *newAdj;
     unsigned *tmpAdj;
     unsigned *tmpCd;
     sharedVar = 0;
     //Reconstruct Graph
-    #pragma omp parallel
+    #pragma omp parallel num_threads(NTHRD)
     {
         unsigned tid = omp_get_thread_num();
         #pragma omp for reduction (+:sharedVar)
@@ -954,6 +952,8 @@ graph* extractSub(graph* dag, unsigned startV, unsigned stride, unsigned thresh)
                 ds[i] = deg;
                 sharedVar += deg;
             }
+            else
+                ds[i] = 0;
         }
 
         #pragma omp single
@@ -967,6 +967,7 @@ graph* extractSub(graph* dag, unsigned startV, unsigned stride, unsigned thresh)
             if (g->n < 5*NTHRD)
                 serialPrefix(ds, newCd, 1, g->n);
         }
+
         
         #pragma omp barrier
 
@@ -982,6 +983,9 @@ graph* extractSub(graph* dag, unsigned startV, unsigned stride, unsigned thresh)
             #pragma omp barrier
             applyThrdPrefix(newCd, start, end);
         }
+    
+
+        #pragma omp barrier
 
         //PREFIX SCAN END
 
@@ -995,8 +999,9 @@ graph* extractSub(graph* dag, unsigned startV, unsigned stride, unsigned thresh)
             if (vExist[i])
             {
                 unsigned deg = 0;
-                for (unsigned j = g->cd[i]; j<g->cd[i]+ds[i]; j++)
+                for (unsigned j = g->cd[i]; j<g->cd[i+1]; j++)
                 {
+                    if (g->adj[j]>i) break;
                     unsigned eid = g->eid[j];
                     if (supp[eid] >= thresh)
                         newAdj[newCd[i] + deg++] = g->adj[j];
@@ -1004,9 +1009,10 @@ graph* extractSub(graph* dag, unsigned startV, unsigned stride, unsigned thresh)
             }
         }
 
+
     }    
 
-    g->e = g->cd[g->n];
+    g->e = newCd[g->n];
 
 
     tmpAdj = g->adj;
@@ -1023,6 +1029,8 @@ graph* extractSub(graph* dag, unsigned startV, unsigned stride, unsigned thresh)
     free(supp);
     free(ds);
     free(g->eid);
+
+    printf("computed filtered graph\n");
 
     return g;
 }
@@ -1299,6 +1307,7 @@ int main(int argc, char** argv) {
 
     graph* gFilt;
     gFilt = extractSub(g, 0, 1, k-2); 
+
 
 	n = kclique_main(k, gFilt);
 

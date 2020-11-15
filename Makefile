@@ -1,5 +1,5 @@
 CC=g++
-CFLAGS=-O9
+CFLAGS=-O9 -std=c++11
 
 all: nodeParallel
 
