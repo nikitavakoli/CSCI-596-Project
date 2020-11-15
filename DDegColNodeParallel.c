@@ -14,7 +14,7 @@ p is the number of threads
 Will print the number of k-cliques.
 */
 
-
+#include <iostream>
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdbool.h>
@@ -22,22 +22,22 @@ Will print the number of k-cliques.
 #include <time.h>
 #include <omp.h>
 #include <cassert>
+#include <vector>
 #include <algorithm>
 #include <unordered_map>
 
 #define NLINKS 100000000 //maximum number of edges for memory allocation, will increase if needed
 
+
+#define KAR_DEBUG
+#undef KAR_DEBUG
+
+unsigned sharedVar;
+
 typedef struct edge{
 	unsigned s;
 	unsigned t;
-
-    edge(){}
-    edge(unsigned s, unsigned t)
-    {
-        this->s = s;
-        this->t = t;
-    }
-};
+} edge;
 
 typedef struct {
 	unsigned n;//number of nodes
@@ -53,6 +53,8 @@ typedef struct {
     unsigned e;
 	unsigned *cd;//cumulative degree: (starts with 0) length=n+1
 	unsigned *adj;//truncated list of neighbors
+    std::pair<unsigned, unsigned> *adjEid;
+    //std::vector<std::pair<unsigned, unsigned>> adjEid;
     unsigned *eid;
 	unsigned core;//core value of the graph
 } graph;
@@ -380,9 +382,13 @@ void trussScan(unsigned numEdges, int *EdgeSupport, unsigned level, unsigned *cu
     const unsigned BUFFER_SIZE_BYTES = 2048;
     const unsigned BUFFER_SIZE = BUFFER_SIZE_BYTES/sizeof(unsigned);
 
+    #pragma omp single
+    sharedVar = 0;
+    #pragma omp barrier
+
     unsigned buff[BUFFER_SIZE];
     unsigned index = 0;
-    unsigned long long peelComplexity = 0;
+
 
     #pragma omp for schedule(static) 
     for(long i = 0; i < numEdges; i++) {
@@ -395,12 +401,13 @@ void trussScan(unsigned numEdges, int *EdgeSupport, unsigned level, unsigned *cu
     }
 
     if(index > 0) {
-	    long tempIdx = __sync_fetch_and_add(currTail, index);
+	    unsigned tempIdx = __sync_fetch_and_add(currTail, index);
 
-	    for(long j = 0; j < index; j++) {
+	    for(unsigned j = 0; j < index; j++) {
 	        curr[tempIdx+j] = buff[j];
 	    }
     }
+
 
 #pragma omp barrier
 
@@ -408,8 +415,8 @@ void trussScan(unsigned numEdges, int *EdgeSupport, unsigned level, unsigned *cu
 
 
 //Process a sublevel in a level using intersection based approach
-void PKT_processSubLevel_intersection(graph *g, unsigned *curr, bool *InCurr, unsigned currTail, int *EdgeSupport, 
-    int level, unsigned *next, unsigned *nextTail, bool *processed, edge * edgeIdtoEdge) {
+//void PKT_processSubLevel_intersection(graph *g, unsigned *curr, bool *InCurr, unsigned currTail, int *EdgeSupport, int level, unsigned *next, unsigned *nextTail, bool *processed, std::vector<edge>& edgeIdtoEdge) {
+void PKT_processSubLevel_intersection(graph *g, unsigned *curr, bool *InCurr, unsigned currTail, int *EdgeSupport, int level, unsigned *next, unsigned *nextTail, bool *processed, edge* edgeIdtoEdge) {
 
     //Size of cache line
     const unsigned BUFFER_SIZE_BYTES = 2048;
@@ -417,6 +424,10 @@ void PKT_processSubLevel_intersection(graph *g, unsigned *curr, bool *InCurr, un
 
     unsigned buff[BUFFER_SIZE];
     unsigned index = 0;
+
+    #pragma omp single
+    sharedVar=0;
+    #pragma omp barrier
 
 #pragma omp for schedule(dynamic,4)
     for (unsigned i = 0; i < currTail; i++) {
@@ -429,6 +440,11 @@ void PKT_processSubLevel_intersection(graph *g, unsigned *curr, bool *InCurr, un
 	    unsigned u = ev.s;
 	    unsigned v = ev.t;
 
+#ifdef KAR_DEBUG
+        assert(e1 < g->e/2);
+        assert(EdgeSupport[e1] <= level);
+        assert(u < g->n); assert(v < g->n);
+#endif
 
 	    unsigned uStart = g->cd[u], uEnd = g->cd[u+1];
         unsigned vStart = g->cd[v], vEnd = g->cd[v+1];
@@ -446,6 +462,10 @@ void PKT_processSubLevel_intersection(graph *g, unsigned *curr, bool *InCurr, un
             else if( g->adj[j_index] == g->adj[k_index] ) {
 		        unsigned e2 = g->eid[ k_index ];  //<v,w>
                 unsigned e3 = g->eid[ j_index ];  //<u,w>
+
+#ifdef KAR_DEBUG
+                assert(e2 < g->e/2); assert(e3 < g->e/2);
+#endif
 
 
                 //If e1, e2, e3 forms a triangle
@@ -503,9 +523,17 @@ void PKT_processSubLevel_intersection(graph *g, unsigned *curr, bool *InCurr, un
             }
             else if( g->adj[j_index] < g->adj[k_index] ) {
                 j_index++;
+#ifdef KAR_DEBUG
+                if (j_index != uEnd)
+                    assert(g->adj[j_index] > g->adj[j_index-1]);
+#endif
             }
             else if( g->adj[k_index] < g->adj[j_index] ) {
                 k_index++;
+#ifdef KAR_DEBUG
+                if (k_index != vEnd)
+                    assert(g->adj[k_index] > g->adj[k_index-1]);
+#endif
             }
 	    }
     }
@@ -579,6 +607,10 @@ void triangleCount(graph* g, unsigned* ds, int* supp, unsigned maxOutDeg)
                         continue;
                     unsigned e2 = g->eid[k];
                     unsigned e3 = got->second;
+#ifdef KAR_DEBUG
+                    assert(e1!=e2); assert(e2!=e3); assert(e1!=e3);
+                    assert(e1 <= g->e/2); assert(e2 <= g->e/2); assert(e3 <= g->e/2);
+#endif
                     __sync_fetch_and_add(&supp[e1], 1);
                     __sync_fetch_and_add(&supp[e2], 1);
                     __sync_fetch_and_add(&supp[e3], 1);
@@ -637,6 +669,11 @@ void triangleCount(graph* g, unsigned* ds, bool* deleted, int* supp, unsigned ma
     }
 }
 
+bool comparePair(std::pair<unsigned, unsigned> p1, std::pair<unsigned, unsigned> p2)
+{
+    return p1.first > p2.first;
+}
+
 
 graph* extractSub(graph* dag, unsigned startV, unsigned stride, unsigned thresh)
 {
@@ -661,7 +698,6 @@ graph* extractSub(graph* dag, unsigned startV, unsigned stride, unsigned thresh)
     bool* processed;
     unsigned currFrontierSize, nxtFrontierSize;
 
-    unsigned sharedVar;
 
     #pragma omp parallel num_threads(NTHRD)
     {
@@ -680,7 +716,12 @@ graph* extractSub(graph* dag, unsigned startV, unsigned stride, unsigned thresh)
         {
             vExist[i] = true;
             for (unsigned j = dag->cd[i]; j < dag->cd[i+1]; j++)
+            {
                 vExist[dag->adj[j]] = true;
+#ifdef KAR_DEBUG
+                assert(dag->adj[j] < i);
+#endif
+            }
         }
 
         #pragma omp single
@@ -697,7 +738,7 @@ graph* extractSub(graph* dag, unsigned startV, unsigned stride, unsigned thresh)
                     unsigned neigh = dag->adj[j];
                     if (vExist[neigh])
                     {
-                        ds[i] += vExist[neigh];
+                        ds[i]++;
                         __sync_fetch_and_add(&dp[neigh], 1);
                     }
                 }
@@ -718,8 +759,8 @@ graph* extractSub(graph* dag, unsigned startV, unsigned stride, unsigned thresh)
             uniqE = (unsigned *)malloc((dag->n+1)*sizeof(unsigned)); uniqE[0]=0;
             if (dag->n < 5*NTHRD)
             { 
-                serialPrefix(dp, g->cd, 1, dag->n+1);
-                serialPrefix(ds, uniqE, 1, dag->n+1);
+                serialPrefix(dp, g->cd, 1, dag->n);
+                serialPrefix(ds, uniqE, 1, dag->n);
             }
         }
         
@@ -740,20 +781,20 @@ graph* extractSub(graph* dag, unsigned startV, unsigned stride, unsigned thresh)
             applyThrdPrefix(uniqE, start, end);
         }
         //PREFIX SCAN END//
+}
 
-        #pragma omp single
-        printf("computed csr offsets. Edges = %u\n", uniqE[dag->n]);
+    printf("computed csr offsets. Edges = %u\n", uniqE[dag->n]);
 
-        //#pragma omp barrier
-        #pragma omp single
-        {
-            supp = (int  *)malloc(uniqE[dag->n]*sizeof(int));
-            eIdToEdge = (edge *)malloc(uniqE[dag->n]*sizeof(edge));
-            g->adj = (unsigned *)malloc(g->cd[dag->n]*sizeof(unsigned));
-            g->eid = (unsigned *)malloc(g->cd[dag->n]*sizeof(unsigned));
-        }
-        #pragma omp barrier
+    supp = (int  *)malloc(uniqE[dag->n]*sizeof(int));
+    eIdToEdge = (edge *)malloc(uniqE[dag->n]*sizeof(edge)); 
+    g->adjEid = (std::pair<unsigned, unsigned>*) malloc(g->cd[dag->n]*sizeof(std::pair<unsigned, unsigned>));
+    printf("size of edge = %d, size of adjEid = %d\n", sizeof(edge), sizeof(std::pair<unsigned, unsigned>));
+    g->adj = (unsigned *)malloc(g->cd[dag->n]*sizeof(unsigned));
+    g->eid = (unsigned *)malloc(g->cd[dag->n]*sizeof(unsigned));
 
+    #pragma omp parallel
+    {
+        unsigned tid = omp_get_thread_num();
 
         #pragma omp for
         for(unsigned i = 0; i < dag->n; i++)
@@ -770,24 +811,31 @@ graph* extractSub(graph* dag, unsigned startV, unsigned stride, unsigned thresh)
                 for (unsigned j = dag->cd[i]; j < dag->cd[i+1]; j++)
                 {
                     unsigned neigh = dag->adj[j];
+#ifdef KAR_DEBUG
                     //no duplicate edges
                     if (j > dag->cd[i]) assert (neigh != dag->adj[j-1]);
                     //no self edges
-                    assert(neigh != i);
+                    assert(neigh < i);
+#endif
 
                     if (vExist[neigh])
                     {
-                        unsigned eid = uniqE[i]+deg;
+                        unsigned edgeId = uniqE[i]+deg;
 
-                        eIdToEdge[eid].s = i;
-                        eIdToEdge[eid].t = neigh;
+                        eIdToEdge[edgeId].s = i;
+                        eIdToEdge[edgeId].t = neigh;
 
-                        g->adj[g->cd[i]+deg] = neigh;
-                        g->eid[g->cd[i]+deg++] = eid; 
+                        g->adjEid[g->cd[i]+deg] = std::make_pair(neigh, edgeId);
 
                         unsigned prev = __sync_fetch_and_add(&dp[neigh], 1);
-                        g->adj[g->cd[neigh]+ds[neigh]+prev] = i;
-                        g->eid[g->cd[neigh]+ds[neigh]+prev] = eid;
+                        g->adjEid[g->cd[neigh]+ds[neigh]+prev] = std::make_pair(i, edgeId);
+
+#ifdef KAR_DEBUG
+                        assert(edgeId < uniqE[dag->n]);
+                        assert(g->cd[i]+deg < g->cd[dag->n]);
+                        assert(g->cd[neigh]+ds[neigh]+prev < g->cd[dag->n]);
+#endif
+                        deg++;
                     }
                 }
             }
@@ -800,7 +848,14 @@ graph* extractSub(graph* dag, unsigned startV, unsigned stride, unsigned thresh)
         for (unsigned i = 0; i < dag->n; i++)
         {
             if (vExist[i])
-                std::sort(g->adj+g->cd[i]+ds[i], g->adj+g->cd[i+1]);
+            {
+                std::sort(g->adjEid+g->cd[i], g->adjEid+g->cd[i+1]);
+                for (unsigned j = g->cd[i]; j < g->cd[i+1]; j++)
+                {
+                    g->adj[j] = g->adjEid[j].first;
+                    g->eid[j] = g->adjEid[j].second;
+                }
+            }
         }
 
         #pragma omp single
@@ -808,26 +863,43 @@ graph* extractSub(graph* dag, unsigned startV, unsigned stride, unsigned thresh)
 
     } 
 
+    free(g->adjEid);
+
+
     g->e = g->cd[dag->n]; g->n = dag->n;
+    assert(g->e/2 == uniqE[dag->n]);
+    g->core = dag->core;
+
+    #pragma omp parallel for
+    for (unsigned i=0; i<g->e/2; i++)
+        supp[i] = 0;
 
     triangleCount(g, ds, supp, maxOutDeg);
 
-    currFrontier = (unsigned *)malloc(g->e*sizeof(unsigned));
-    nxtFrontier = (unsigned *)malloc(g->e*sizeof(unsigned));
-    inCurr = (bool *)malloc(g->e*sizeof(bool));
-    processed = (bool *)malloc(g->e*sizeof(bool));
+    currFrontier = (unsigned *)malloc((g->e/2)*sizeof(unsigned));
+    nxtFrontier = (unsigned *)malloc((g->e/2)*sizeof(unsigned));
+    inCurr = (bool *)malloc((g->e/2)*sizeof(bool));
+    processed = (bool *)malloc((g->e/2)*sizeof(bool));
     currFrontierSize = 0; nxtFrontierSize = 0;
     #pragma omp parallel
     {
         #pragma omp for schedule (static)
-        for (unsigned i = 0; i < g->e; i++)
+        for (unsigned i = 0; i < uniqE[g->n]; i++)
+        {
             processed[i] = false;
+            inCurr[i] = false;
+        }
 
         //Remove_undesired_edges();
-        trussScan(g->cd[dag->n], supp, thresh-1, currFrontier, &currFrontierSize, inCurr);
+        trussScan(g->e/2, supp, thresh-1, currFrontier, &currFrontierSize, inCurr);
+        #pragma omp single
+        printf("edges peeled = %u\n", currFrontierSize);
         while(currFrontierSize > 0)
+        //while(0)
         {
 	        PKT_processSubLevel_intersection(g, currFrontier, inCurr, currFrontierSize, supp, thresh-1, nxtFrontier, &nxtFrontierSize, processed, eIdToEdge);
+            #pragma omp single
+            printf("done level. New size = %u\n", nxtFrontierSize);
             #pragma omp for
             for (unsigned i = 0; i < nxtFrontierSize; i++)
                 inCurr[nxtFrontier[i]] = true;
@@ -856,17 +928,18 @@ graph* extractSub(graph* dag, unsigned startV, unsigned stride, unsigned thresh)
     free(processed);
     free(uniqE);
     
-    unsigned *newCd = (unsigned *)malloc(dag->n*sizeof(unsigned));
+    unsigned *newCd = (unsigned *)malloc((dag->n+1)*sizeof(unsigned));
     newCd[0] = 0;
 
     unsigned *newAdj;
     unsigned *tmpAdj;
     unsigned *tmpCd;
+    sharedVar = 0;
     //Reconstruct Graph
     #pragma omp parallel
     {
         unsigned tid = omp_get_thread_num();
-        #pragma omp for
+        #pragma omp for reduction (+:sharedVar)
         for (unsigned i = 0; i < dag->n; i++)
         {
             if (vExist[i])
@@ -879,8 +952,12 @@ graph* extractSub(graph* dag, unsigned startV, unsigned stride, unsigned thresh)
                         deg++;
                 }
                 ds[i] = deg;
+                sharedVar += deg;
             }
         }
+
+        #pragma omp single
+        printf("num edges remaining = %u\n", sharedVar);
 
         //PREFIX SCAN
         #pragma omp single
@@ -888,7 +965,7 @@ graph* extractSub(graph* dag, unsigned startV, unsigned stride, unsigned thresh)
             
             newCd = (unsigned *)malloc((g->n+1)*sizeof(unsigned)); newCd[0]=0;
             if (g->n < 5*NTHRD)
-                serialPrefix(ds, newCd, 1, g->n+1);
+                serialPrefix(ds, newCd, 1, g->n);
         }
         
         #pragma omp barrier
@@ -905,6 +982,7 @@ graph* extractSub(graph* dag, unsigned startV, unsigned stride, unsigned thresh)
             #pragma omp barrier
             applyThrdPrefix(newCd, start, end);
         }
+
         //PREFIX SCAN END
 
         #pragma omp single
@@ -928,6 +1006,8 @@ graph* extractSub(graph* dag, unsigned startV, unsigned stride, unsigned thresh)
 
     }    
 
+    g->e = g->cd[g->n];
+
 
     tmpAdj = g->adj;
     g->adj = newAdj;
@@ -942,7 +1022,6 @@ graph* extractSub(graph* dag, unsigned startV, unsigned stride, unsigned thresh)
     free(vExist);
     free(supp);
     free(ds);
-    free(dp);
     free(g->eid);
 
     return g;
@@ -1221,7 +1300,7 @@ int main(int argc, char** argv) {
     graph* gFilt;
     gFilt = extractSub(g, 0, 1, k-2); 
 
-	n = kclique_main(k, g);
+	n = kclique_main(k, gFilt);
 
 	printf("Number of %u-cliques: %llu\n", k, n);
 
