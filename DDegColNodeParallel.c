@@ -1204,7 +1204,11 @@ void kclique_thread(unsigned char l, subgraph *sg, unsigned long long *n) {
 		return;
 	for (i = 0; i < sg->n[l]; i++) {
 		u = sg->nodes[l][i];
-		if (sg->color[u] < l - 1)
+        /***********************
+        MY CODE HERE
+        Degree based filtering
+        ***********************/
+		if ((sg->color[u] < l - 1) || (sg->d[l][u] < l - 1))
 			continue;
 
 		sg->n[l - 1] = 0;
@@ -1260,6 +1264,23 @@ unsigned long long kclique_main(unsigned char k, graph *g) {
 	return n;
 }
 
+unsigned long long kclique_main(unsigned char k, unsigned startV, unsigned stride, graph *g) {
+	int u;
+	unsigned long long n = 0;
+	subgraph *sg;
+#pragma omp parallel private(sg,u) reduction(+:n)
+	{
+		sg = allocsub(g, k);
+#pragma omp for schedule(dynamic, 1) nowait
+		for (u = startV; u < g->n; u+=stride) {
+			mksub(g, u, sg, k);
+			kclique_thread(k - 1, sg, &n);
+		}
+
+	}
+	return n;
+}
+
 int main(int argc, char** argv) {
 	edgelist* el;
 	graph* g;
@@ -1305,11 +1326,17 @@ int main(int argc, char** argv) {
 	printf("Iterate over all cliques\n");
 
 
+    unsigned stride = 3;
     graph* gFilt;
-    gFilt = extractSub(g, 0, 1, k-2); 
+    n = 0;
+    for (unsigned i = 0; i < stride; i++)
+    {
+        gFilt = extractSub(g, i, stride, k-2); 
 
 
-	n = kclique_main(k, gFilt);
+	    n += kclique_main(k, i, stride, gFilt);
+        free_graph(gFilt);
+    }
 
 	printf("Number of %u-cliques: %llu\n", k, n);
 
