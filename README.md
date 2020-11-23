@@ -1,15 +1,12 @@
 CSCI 596 - Final Project: Distributed Memory K-Clique Enumeration
 
+![CSCI596](/path/to/img.jpg)
+
 Members: Christopher Fucci, Kartik Lakhotia, Niki Tavakoli
 
 Project Goal: We are exploring shared + distributed memory parallelism to enumerate cliques
 
 Approach: 
-Store graph on every node. 
-The vertex set will then be divided into several small subsets. There will be a common queue of the subset IDs.
-Each node pulls an index from the queue and computes the cliques for that subset of vertices
+Store graph on every node; the vertex set will then be divided into several small subsets. There will be a common queue of the subset IDs, and each node pulls an index from the queue and computes the cliques for that subset of vertices
 
-Methods utilized:
-- MPI_Send/Receive
-- MPI_Get/Put
-- MPI_Win_lock
+Methods utilized: MPI_Send/Receive, MPI_Get/Put, and MPI_Win_lock
