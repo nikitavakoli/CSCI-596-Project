@@ -1,6 +1,6 @@
 CSCI 596 - Final Project: Distributed Memory K-Clique Enumeration
 
-![](graph_clique.png)
+![](graph.png)
 
 Members: Christopher Fucci, Kartik Lakhotia, Niki Tavakoli
 
