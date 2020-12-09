@@ -37,6 +37,27 @@ We used a base code from the works of Danisch, Balalau & Sozio (2018) to impleme
 - Reduces memory overhead and speed 
 
 
+## Compiling & Execution
+
+
+### DDegColNodeParallel-2.c
+
+
+#### To Compile:
+
+
+
+#### To Execute:
+
+
+
+
+
+
+
+
+
+
 ## Future Work
 Currently, we target small graphs and deep cliques. Hence, the graph is replicated on all nodes and is distributed.
 In the future, we want to partition the graph so that is not replicated on all nodes and use work stealing for load balancing. 
