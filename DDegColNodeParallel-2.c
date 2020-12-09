@@ -1352,6 +1352,10 @@ int main(int argc, char** argv) {
         MPI_Fetch_and_op(&i, &val, MPI_INT, 0, 0, MPI_SUM, win);
         MPI_Win_unlock(0, win);
         
+        if(val >= stride){
+            break;
+        }
+        
         gFilt = extractSub(g, val, stride, k-2);
         
         unsigned long long locCount = kclique_main(k, val, stride, gFilt);
