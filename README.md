@@ -41,6 +41,7 @@ We used a base code from the works of Danisch, Balalau & Sozio (2018) to impleme
 
 
 ### DDegColNodeParallel-2.c
+This program expands upon the code implementation done by Danisch, Balalau & Sozio detailed in "Listing k-cliques in Sparse Real-World Graphs." It prints the total number of k-cliques.
 
 
 #### To Compile:
