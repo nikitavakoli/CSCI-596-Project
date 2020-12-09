@@ -19,6 +19,7 @@ Will print the number of k-cliques.
 #include <stdio.h>
 #include <stdbool.h>
 #include <string.h>
+#include <unistd.h>
 #include <time.h>
 #include <omp.h>
 #include <mpi.h>
@@ -339,7 +340,7 @@ graph* mkgraph(edgelist *el) {
 		d[i - 1] = 0;
 	}
 
-	printf("core value (max truncated degree) = %u\n", max);
+	//printf("core value (max truncated degree) = %u\n", max);
 
 	g->adj = (unsigned*) malloc(el->e * sizeof(unsigned));
 
@@ -623,7 +624,7 @@ void triangleCount(graph* g, unsigned* ds, int* supp, unsigned maxOutDeg)
                 neighSet.erase(g->adj[j]);
         }
     }
-    printf("total count = %llu\n", totCount);
+    //printf("total count = %llu\n", totCount);
 }
 
 //overloaded function, discards deleted edges
@@ -689,7 +690,7 @@ graph* extractSub(graph* dag, unsigned startV, unsigned stride, unsigned thresh)
     unsigned NTHRD = omp_get_num_threads();
     unsigned BS = (dag->n-1)/NTHRD + 1;
 
-    printf("num vertices = %d, num edges = %d\n", dag->n, dag->cd[dag->n]);
+    //printf("num vertices = %d, num edges = %d\n", dag->n, dag->cd[dag->n]);
 
     int *supp;
     unsigned *uniqE;
@@ -725,8 +726,8 @@ graph* extractSub(graph* dag, unsigned startV, unsigned stride, unsigned thresh)
             }
         }
 
-        #pragma omp single
-        printf("found vertices\n");
+        //#pragma omp single
+        //printf("found vertices\n");
 
         //CREATING DEGREE ARRAYS OF VERTICES
         #pragma omp for reduction (max:maxOutDeg)
@@ -749,8 +750,8 @@ graph* extractSub(graph* dag, unsigned startV, unsigned stride, unsigned thresh)
         }
 
 
-        #pragma omp single
-        printf("computed degrees\n");
+        //#pragma omp single
+        //printf("computed degrees\n");
 
         #pragma omp barrier 
         //PREFIX SCAN START//
@@ -784,12 +785,12 @@ graph* extractSub(graph* dag, unsigned startV, unsigned stride, unsigned thresh)
         //PREFIX SCAN END//
 }
 
-    printf("computed csr offsets. Edges = %u\n", uniqE[dag->n]);
+    //printf("computed csr offsets. Edges = %u\n", uniqE[dag->n]);
 
     supp = (int  *)malloc(uniqE[dag->n]*sizeof(int));
     eIdToEdge = (edge *)malloc(uniqE[dag->n]*sizeof(edge)); 
     g->adjEid = (std::pair<unsigned, unsigned>*) malloc(g->cd[dag->n]*sizeof(std::pair<unsigned, unsigned>));
-    printf("size of edge = %d, size of adjEid = %d\n", sizeof(edge), sizeof(std::pair<unsigned, unsigned>));
+    //printf("size of edge = %d, size of adjEid = %d\n", sizeof(edge), sizeof(std::pair<unsigned, unsigned>));
     g->adj = (unsigned *)malloc(g->cd[dag->n]*sizeof(unsigned));
     g->eid = (unsigned *)malloc(g->cd[dag->n]*sizeof(unsigned));
 
@@ -842,8 +843,8 @@ graph* extractSub(graph* dag, unsigned startV, unsigned stride, unsigned thresh)
             }
         }
 
-        #pragma omp single
-        printf("constructed csr edge array\n");
+        //#pragma omp single
+        //printf("constructed csr edge array\n");
 
         #pragma omp for
         for (unsigned i = 0; i < dag->n; i++)
@@ -859,8 +860,8 @@ graph* extractSub(graph* dag, unsigned startV, unsigned stride, unsigned thresh)
             }
         }
 
-        #pragma omp single
-        printf("sorted adjacencies\n");
+        //#pragma omp single
+        //printf("sorted adjacencies\n");
 
     } 
 
@@ -893,13 +894,13 @@ graph* extractSub(graph* dag, unsigned startV, unsigned stride, unsigned thresh)
 
         //Remove_undesired_edges();
         trussScan(g->e/2, supp, thresh-1, currFrontier, &currFrontierSize, inCurr);
-        #pragma omp single
-        printf("edges peeled = %u\n", currFrontierSize);
+        //#pragma omp single
+        //printf("edges peeled = %u\n", currFrontierSize);
         while(currFrontierSize > 0)
         {
 	        PKT_processSubLevel_intersection(g, currFrontier, inCurr, currFrontierSize, supp, thresh-1, nxtFrontier, &nxtFrontierSize, processed, eIdToEdge);
-            #pragma omp single
-            printf("done level. New size = %u\n", nxtFrontierSize);
+            //#pragma omp single
+            //printf("done level. New size = %u\n", nxtFrontierSize);
             #pragma omp for
             for (unsigned i = 0; i < nxtFrontierSize; i++)
                 inCurr[nxtFrontier[i]] = true;
@@ -957,8 +958,8 @@ graph* extractSub(graph* dag, unsigned startV, unsigned stride, unsigned thresh)
                 ds[i] = 0;
         }
 
-        #pragma omp single
-        printf("num edges remaining = %u\n", sharedVar);
+        //#pragma omp single
+        //printf("num edges remaining = %u\n", sharedVar);
 
         //PREFIX SCAN
         #pragma omp single
@@ -1031,7 +1032,7 @@ graph* extractSub(graph* dag, unsigned startV, unsigned stride, unsigned thresh)
     free(ds);
     free(g->eid);
 
-    printf("computed filtered graph\n");
+    //printf("computed filtered graph\n");
 
     return g;
 }
@@ -1293,7 +1294,7 @@ int main(int argc, char** argv) {
         exit(1);
     }
 
-    //TODO: MPI_Init(&argc, &argv);
+    MPI_Init(&argc, &argv);
     
 	unsigned char k = atoi(argv[2]);
 	unsigned long long n;
@@ -1304,113 +1305,79 @@ int main(int argc, char** argv) {
 	t1 = time(NULL);
 	t0 = t1;
 
-	printf("Reading edgelist from file %s\n", argv[3]);
+	//printf("Reading edgelist from file %s\n", argv[3]);
 
 	el = readedgelist(argv[3]);
-	printf("Number of nodes = %u\n", el->n);
-	printf("Number of edges = %u\n", el->e);
+	//printf("Number of nodes = %u\n", el->n);
+	//printf("Number of edges = %u\n", el->e);
 
 	t2 = time(NULL);
-	printf("- Time = %ldh%ldm%lds\n", (t2 - t1) / 3600, ((t2 - t1) % 3600) / 60, ((t2 - t1) % 60));
+	//printf("- Time = %ldh%ldm%lds\n", (t2 - t1) / 3600, ((t2 - t1) % 3600) / 60, ((t2 - t1) % 60));
 	t1 = t2;
 
-	printf("Building the graph structure\n");
+	//printf("Building the graph structure\n");
 	ord_core(el);
 	relabel(el);
 	g = mkgraph(el);
 
-	printf("Number of nodes (degree > 0) = %u\n", g->n);
+	//printf("Number of nodes (degree > 0) = %u\n", g->n);
 
 	free_edgelist(el);
 
 	t2 = time(NULL);
-	printf("- Time = %ldh%ldm%lds\n", (t2 - t1) / 3600, ((t2 - t1) % 3600) / 60, ((t2 - t1) % 60));
+	//printf("- Time = %ldh%ldm%lds\n", (t2 - t1) / 3600, ((t2 - t1) % 3600) / 60, ((t2 - t1) % 60));
 	t1 = t2;
 
-	printf("Iterate over all cliques\n");
+	//printf("Iterate over all cliques\n");
 
     unsigned stride = 3;
     graph* gFilt;
     n = 0;
     
-    //TODO: check if rank is 0, then make window buffer just once
-    int window_buffer = 0;
+    // Rank of process
     int my_rank;
     MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
     
-    if(my_rank == 0){
-        //Set window size
-        window_buffer = 1; // It should hold only one integer
-    }
-    
-    // Create window
-    MPI_Win window;
-    MPI_Win_create(&window_buffer, sizeof(int), sizeof(int), MPI_INFO_NULL, MPI_COMM_WORLD, &window);
-    MPI_Win_fence(0, window);
- 
-    int val;
-    while(1){
+    int window_buffer = 0;
+    int i = 1;
+
+    MPI_Win win;
+    MPI_Win_create(&window_buffer, sizeof(int), sizeof(int), MPI_INFO_NULL, MPI_COMM_WORLD, &win);
+    MPI_Win_fence(0, win);
+
+    int val = 0;
+    while(val < stride){
         
-        //TODO: call MPI_Get
-        /*
-         origin_addr
-             Address of the buffer in which to receive the data
-         origin_count
-             number of entries in origin buffer (nonnegative integer)
-         origin_datatype
-             datatype of each entry in origin buffer (handle)
-         target_rank
-             rank of target (nonnegative integer)
-         target_disp
-             displacement from window start to the beginning of the target buffer (nonnegative integer)
-         target_count
-             number of entries in target buffer (nonnegative integer)
-         target_datatype
-             datatype of each entry in target buffer (handle)
-         win
-             window object used for communication (handle)
-         */
-        MPI_Get(&val, 1, MPI_INT, 0, 0, 1, MPI_INT, window);
-        
-        //TODO: determine the appropriate parameters for MPI_Get
-        /*
-        if the value is greater than or equal to stride, that means all partitions are done.
-        So you simply exit. Otherwise, you call extractSub and  kclique_main as shown above
-        but replace 'i' with the value fetched
-        */
-        //TODO: determine when to break
-        
-        
-        if(val >= stride){
-            break; // All partitions are done
-        }
+        MPI_Win_lock(MPI_LOCK_EXCLUSIVE, 0, 0, win);
+        MPI_Fetch_and_op(&i, &val, MPI_INT, 0, 0, MPI_SUM, win);
+        MPI_Win_unlock(0, win);
         
         gFilt = extractSub(g, val, stride, k-2);
         
-        n += kclique_main(g, val, stride, gFilt);
+        unsigned long long locCount = kclique_main(k, val, stride, gFilt);
+        n += locCount;
         
-        //TODO: call MPI_Put here
-        
+        std::cout << "n count: " << locCount << "val: " << val << std::endl;
+
         free_graph(gFilt);
     }
     
-    for (unsigned i = 0; i < stride; i++)
-    {
-        gFilt = extractSub(g, i, stride, k-2);
-        
-	    n += kclique_main(k, i, stride, gFilt);
-        free_graph(gFilt);
-    }
+    int numCliques = 0;
+    MPI_Allreduce(&n, &numCliques, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
+                     
+    MPI_Win_fence(0, win);
 
-	printf("Number of %u-cliques: %llu\n", k, n);
+	printf("Number of %u-cliques: %llu\n", k, numCliques);
 
 	t2 = time(NULL);
-	printf("- Time = %ldh%ldm%lds\n", (t2 - t1) / 3600, ((t2 - t1) % 3600) / 60, ((t2 - t1) % 60));
+	//printf("- Time = %ldh%ldm%lds\n", (t2 - t1) / 3600, ((t2 - t1) % 3600) / 60, ((t2 - t1) % 60));
 	t1 = t2;
 
 	free_graph(g);
 
-	printf("- Overall time = %ldh%ldm%lds\n", (t2 - t0) / 3600, ((t2 - t0) % 3600) / 60, ((t2 - t0) % 60));
+	//printf("- Overall time = %ldh%ldm%lds\n", (t2 - t0) / 3600, ((t2 - t0) % 3600) / 60, ((t2 - t0) % 60));
+    
+    MPI_Finalize();
 
 	return 0;
 }
