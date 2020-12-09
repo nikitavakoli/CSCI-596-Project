@@ -34,7 +34,7 @@ We used a base code from the works of Danisch, Balalau & Sozio (2018) to impleme
 3. Cyclic vertex partitioning   
 - Better load balancing
 4. Hybrid Shared-memory + Distributed-memory parallelism  
-- Reduces memory overhead and speed 
+- Reduces memory overhead and increases speed of output
 
 
 ## Compiling & Execution
