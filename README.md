@@ -1,6 +1,7 @@
 # Distributed Memory K-Clique Enumeration
 
 ![Cliques in a toy graph](graph.png)
+*Cliques of varying sizes in a graph*
 
 Members: Christopher Fucci, Kartik Lakhotia, Niki Tavakoli
 
@@ -17,7 +18,7 @@ While existing algorithms only utilized shared-memory parallelism, our implement
 
 ## Vertex Ordering
 To avoid repeated counting and reduce complexity, vertices in *k*-cliques are always discovered in a monotonic order of their ranking. We use a **degeneracy** based ranking.
-This restrits the maximum size of vertex neighborhood in ordered DAG (Ref: [kClist](https://github.com/maxdan94/kClist)). <br />
+This restricts the maximum size of vertex neighborhood in ordered DAG (Ref: [kClist](https://github.com/maxdan94/kClist)). <br />
 Within the induced subgraph of each vertex' neighbors, we use graph coloring to reduce search space, especially for large *k* (Ref: [DDegCol](https://github.com/gawssin/kcliquelisting/tree/master/ddegcol)). 
 
 
@@ -48,6 +49,7 @@ Edges in the induced subgraph are optionally filtered using their *k*-truss valu
 
 
 ![Dyanmic task (subgraph) scheduling through distributed task queue and MPI RMA functions](parallel_queue.jpg)
+*Dyanmic task (subgraph) scheduling through distributed task queue and MPI RMA operations*
 
 
 #### Optimizations
