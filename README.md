@@ -7,7 +7,7 @@ Members: Christopher Fucci, Kartik Lakhotia, Niki Tavakoli
 ## Introduction
 A *k*-clique is a fully connected dense subgraph with **k** vertices. 
 Clique enumeration is widely used for data mining on graph structures. 
-However, clique enumeration exhibits high computational complexity which increases exponentially with **k**.<br><br>
+However, clique enumeration exhibits high computational complexity which increases exponentially with **k**.<br /><br />
 
 This is an implementation of parallel algorithm for k-clique enumeration that can scale clique enumeration/counting on large-scale clusters.
 While existing algorithms only utilized shared-memory parallelism, our implementation exploits both shared- and distributed-memory parallelism. 
@@ -17,7 +17,7 @@ While existing algorithms only utilized shared-memory parallelism, our implement
 
 ## Vertex Ordering
 To avoid repeated counting and reduce complexity, vertices in *k*-cliques are always discovered in a monotonic order of their ranking. We use a **degeneracy** based ranking.
-This restrits the maximum size of vertex neighborhood in ordered DAG (Ref: [kClist](https://github.com/maxdan94/kClist)). <br>
+This restrits the maximum size of vertex neighborhood in ordered DAG (Ref: [kClist](https://github.com/maxdan94/kClist)). <br />
 Within the induced subgraph of each vertex' neighbors, we use graph coloring to reduce search space, especially for large *k* (Ref: [DDegCol](https://github.com/gawssin/kcliquelisting/tree/master/ddegcol)). 
 
 
@@ -26,11 +26,11 @@ Within the induced subgraph of each vertex' neighbors, we use graph coloring to 
 Our aim is to reduce the runtime of clique enumeration. 
 To this purpose, a copy of graph is stored on every node.
 Off the shelf compute nodes are easily able to store graphs with multi-billion edges (topology only).
-Thus, we avoid expensive network communication during clique counting/enumeration.<br><br>
+Thus, we avoid expensive network communication during clique counting/enumeration.<br /><br />
 
 #### Task Partitioning 
 Given a graph *G(V, E)*, we divide the vertex set *V* into *p* partitions - {*V<sub>1</sub>, V<sub>2</sub> ... V<sub>p</sub>*}.
-Counting cliques starting from vertices in *V<sub>i</sub>* represents the *i<sup>th</sup>* task.<br>
+Counting cliques starting from vertices in *V<sub>i</sub>* represents the *i<sup>th</sup>* task.<br />
 
 Vertices are assigned to partitions in a cyclic manner.
 
@@ -73,6 +73,12 @@ mpirun -n 2 --map-by ppr:1:node ./DDegColNodeParallel 8 5 xyz.txt
 ```
 will launch 2 MPI Ranks on different compute nodes, and use 8 threads per rank to count 5-cliques in the graph specified in xyz.txt file.
 
+The input file should represent graph in an edge list format where each line is a tuple of two integers as shown below:
+```
+u v
+```
+This indicates that there is an edge between vertices `u` and `v`.<br /><br />
+
 
 ## Acknowledgements
 We used a base code from the works of:
@@ -82,5 +88,5 @@ We used a base code from the works of:
 
 
 ## Future Work
-Currently, we target moderately-sized graphs and deep cliques (computationally intensive). Hence, the graph is replicated on all nodes. In the future, we want to partition the graph so that is not replicated on all nodes and use work stealing for load balancing.<br>
+Currently, we target moderately-sized graphs and deep cliques (computationally intensive). Hence, the graph is replicated on all nodes. In the future, we want to partition the graph so that is not replicated on all nodes and use work stealing for load balancing.<br />
 We will also use a distributed-memory parallel algorithm to compute degeneracy based ranking, instead of individually computing on each node.
