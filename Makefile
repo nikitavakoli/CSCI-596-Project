@@ -1,11 +1,14 @@
-CC=g++
+CC=mpic++
 CFLAGS=-O9 -std=c++11
 
-all: nodeParallel
+all: cliqueParallel cliqueShared
 
-nodeParallel : DDegColNodeParallel.c
-	$(CC) $(CFLAGS) DDegColNodeParallel.c -o DDegColNodeParallel -fopenmp
+cliqueParallel : KClique_DistributedMemory.c
+	$(CC) $(CFLAGS) KClique_DistributedMemory.c -o cliqueParallel -fopenmp
 
+cliqueShared : KClique_SharedMemory.c
+	$(CC) $(CFLAGS) KClique_SharedMemory.c -o cliqueShared -fopenmp
 
 clean:
-	rm DDegColNodeParallel
+	rm cliqueParallel
+	rm cliqueShared
