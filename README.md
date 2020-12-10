@@ -29,8 +29,8 @@ Off the shelf compute nodes are easily able to store graphs with multi-billion e
 Thus, we avoid expensive network communication during clique counting/enumeration.<br><br>
 
 #### Task Partitioning 
-Given a graph *G(V, E)*, we divide the vertex set *V* into *p* partitions - {*V<sub>1<\sub>, V<sub>2<\sub> ... V<sub>p<\sub>*}.
-Counting cliques starting from vertices in *V<sub>i<\sub>* represents the *i<sup>th<\sup>* task.<br>
+Given a graph *G(V, E)*, we divide the vertex set *V* into *p* partitions - {*V<sub>1</sub>, V<sub>2</sub> ... V<sub>p</sub>*}.
+Counting cliques starting from vertices in *V<sub>i</sub>* represents the *i<sup>th</sup>* task.<br>
 
 Vertices are assigned to partitions in a cyclic manner.
 
@@ -40,9 +40,9 @@ Vertices are assigned to partitions in a cyclic manner.
 3. When a node is idle, it pops a task from the queue and updates the queue pointer. 
 This is done using `MPI_Fetch_and_op` operation to avoid synchronization between nodes and ensure uniqueness of tasks processed by each node. 
 If task queue is empty, jump to step 7. 
-4. After fetching the *i<sup>th<\sup>* task, the node builds an induced subgraph *G<sub>i<\sub>* on *V<sub>i<\sub>* and its neighborhood. 
+4. After fetching the *i<sup>th</sup>* task, the node builds an induced subgraph *G<sub>i</sub>* on *V<sub>i</sub>* and its neighborhood. 
 Edges in the induced subgraph are optionally filtered using their *k*-truss values.
-5. Then it proceeds to count the cliques with starting vertices in *V<sub>i<\sub>* (in parallel using multiple threads).
+5. Then it proceeds to count the cliques in *G<sub>i</sub>*, with starting vertices in *V<sub>i</sub>* (in parallel using multiple threads).
 6. Repeat: jump to step 3.
 7. Use `MPI_Reduce` to accumulate the contribution of each compute node and report.
 
@@ -62,7 +62,7 @@ make
 ```
 
 
-##Run
+## Run
 ```
 mpirun -n <# ranks> --map-by ppr:1:node ./DDegColNodeParallel <num_threads> <k> <graphFile>
 ```
@@ -74,13 +74,12 @@ mpirun -n 2 --map-by ppr:1:node ./DDegColNodeParallel 8 5 xyz.txt
 will launch 2 MPI Ranks on different compute nodes, and use 8 threads per rank to count 5-cliques in the graph specified in xyz.txt file.
 
 
-##Acknowledgements
+## Acknowledgements
 We used a base code from the works of: 
 1. Danisch, Maximilien, Oana Balalau, and Mauro Sozio. "Listing k-cliques in sparse real-world graphs." Proceedings of the 2018 World Wide Web Conference. 2018 [Code](https://github.com/maxdan94/kClist).
 2. Li, Rong-Hua, et al. "Ordering heuristics for k-clique listing." Proceedings of the VLDB Endowment 13.12 (2020) [Code](https://github.com/gawssin/kcliquelisting/tree/master/ddegcol).
 
 
 ## Future Work
-Currently, we target moderately-sized graphs and deep cliques (computationally intensive). Hence, the graph is replicated on all nodes. In the future, we want to partition the graph so that is not replicated on all nodes and use work stealing for load balancing. <br>
-
+Currently, we target moderately-sized graphs and deep cliques (computationally intensive). Hence, the graph is replicated on all nodes. In the future, we want to partition the graph so that is not replicated on all nodes and use work stealing for load balancing.<br>
 We will also use a distributed-memory parallel algorithm to compute degeneracy based ranking, instead of individually computing on each node.
