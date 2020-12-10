@@ -44,7 +44,10 @@ If task queue is empty, jump to step 7.
 Edges in the induced subgraph are optionally filtered using their *k*-truss values.
 5. Then it proceeds to count the cliques in *G<sub>i</sub>*, with starting vertices in *V<sub>i</sub>* (in parallel using multiple threads).
 6. Repeat: jump to step 3.
-7. Use `MPI_Reduce` to accumulate the contribution of each compute node and report.
+7. Use `MPI_Reduce` to accumulate the contribution of each compute node and report.  
+
+
+![Dyanmic task (subgraph) scheduling through distributed task queue and MPI RMA functions](parallel_queue.jpg)
 
 
 #### Optimizations
