@@ -75,7 +75,8 @@ will launch 2 MPI Ranks on different compute nodes, and use 8 threads per rank t
 
 
 ## Acknowledgements
-We used a base code from the works of: 
+We used a base code from the works of:
+ 
 1. Danisch, Maximilien, Oana Balalau, and Mauro Sozio. "Listing k-cliques in sparse real-world graphs." Proceedings of the 2018 World Wide Web Conference. 2018 [Code](https://github.com/maxdan94/kClist).
 2. Li, Rong-Hua, et al. "Ordering heuristics for k-clique listing." Proceedings of the VLDB Endowment 13.12 (2020) [Code](https://github.com/gawssin/kcliquelisting/tree/master/ddegcol).
 
