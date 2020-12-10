@@ -1,7 +1,8 @@
 # Distributed Memory K-Clique Enumeration
 
-![Cliques in a toy graph](graph.png)
-*Cliques of varying sizes in a graph*
+|![Cliques in a toy graph](graph.png)|
+|:--:|
+|**Cliques of varying sizes in a graph**|
 
 Members: Christopher Fucci, Kartik Lakhotia, Niki Tavakoli
 
@@ -48,8 +49,9 @@ Edges in the induced subgraph are optionally filtered using their *k*-truss valu
 7. Use `MPI_Reduce` to accumulate the contribution of each compute node and report.  
 
 
-![Dyanmic task (subgraph) scheduling through distributed task queue and MPI RMA functions](parallel_queue.jpg)
-*Dyanmic task (subgraph) scheduling through distributed task queue and MPI RMA operations*
+|![Dyanmic task (subgraph) scheduling through distributed task queue and MPI RMA functions](parallel_queue.jpg)|
+|:--:|
+|**Dyanmic task (subgraph) scheduling through distributed task queue and MPI RMA operations**|
 
 
 #### Optimizations
