@@ -61,6 +61,7 @@ Edges in the induced subgraph are optionally filtered using their *k*-truss valu
 make
 ```
 
+
 ##Run
 ```
 mpirun -n <# ranks> --map-by ppr:1:node ./DDegColNodeParallel <num_threads> <k> <graphFile>
