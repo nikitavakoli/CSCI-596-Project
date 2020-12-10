@@ -61,9 +61,11 @@ Edges in the induced subgraph are optionally filtered using their *k*-truss valu
 make
 ```
 
-Running this command will compile and return the executables for the shared memory K-clique program and distributed memory program (cliqueShared and cliqueParallel respectively). We utilize Open MPI's "wrapper" compiler mpic++ and use C++ 11. 
+Running this command will compile and return the executables for the shared memory K-clique program and distributed memory K-clique program (cliqueShared and cliqueParallel respectively). We utilize Open MPI's "wrapper" compiler mpic++ and use C++ 11. 
 
 ## Run
+
+To run the distributed memory program:
 ```
 mpirun -n <# ranks> --map-by ppr:1:node ./cliqueParallel <num_threads> <k> <graphFile>
 ```
@@ -73,6 +75,11 @@ For example, the command
 mpirun -n 2 --map-by ppr:1:node ./cliqueParallel 8 5 xyz.txt
 ```
 will launch 2 MPI Ranks on different compute nodes, and use 8 threads per rank to count 5-cliques in the graph specified in xyz.txt file.
+
+To run the shared memory program:
+```
+./cliqueShared <num_threads> <k> <graphFile>
+```
 
 The input file should represent graph in an edge list format where each line is a tuple of two integers as shown below:
 ```
