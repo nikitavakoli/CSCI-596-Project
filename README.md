@@ -47,7 +47,7 @@ Edges in the induced subgraph are optionally filtered using their *k*-truss valu
 7. Use `MPI_Reduce` to accumulate the contribution of each compute node and report.  
 
 
-![Dyanmic task (subgraph) scheduling through distributed task queue and MPI RMA functions](parallel_queue.jpg){:height="100px" width="100px"}
+![Dyanmic task (subgraph) scheduling through distributed task queue and MPI RMA functions](parallel_queue.jpg){:height="50px" width="50px"}
 
 
 #### Optimizations
